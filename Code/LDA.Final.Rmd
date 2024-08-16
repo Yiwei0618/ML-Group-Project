@@ -1,0 +1,72 @@
+---
+title: "QDA"
+author: "Shiva Chitta"
+date: "2024-04-22"
+output: html_document
+---
+
+```{r}
+library(MASS)
+library(class)
+library(tidyverse)
+library(corrplot)
+library(ISLR2)
+library(e1071)
+library(pROC)
+
+set.seed(42)
+evadoption <- read.csv("thisone.csv")
+#summary(evadoption)
+
+# Convert necessary variables to factors, ensure levels are consistent
+evadoption$ZIPCODE <- as.factor(evadoption$ZIPCODE)
+
+# Create high.mean factor based on the entire dataset
+evadoption$high.mean <- factor(ifelse(evadoption$EV_ADOPT_RATE >= 0.001038, "high", "low"))
+
+# Exclude ZIPCODE and other undesired variables before splitting the data
+ev_data_mean <- evadoption %>%
+  select(-ZIPCODE, -total_ev_count, -TP_MALE, -TP_FEMALE, -HIGH_GRAD_HIGHER, 
+         -BACH_HIGH, -EV_ADOPT_RATE, -RACE_TOT_1RACE, -RACE_TOT_2_RACE, 
+         -RACE_1AI_AN_TOTAL, -RACE_1ASIAN_TOTAL, -RACE_1NHPI_TOTAL, 
+         -ETHN_HISP_LAT_TOTAL, -ETHN_NOT_HISP_LAT_TOTAL)
+
+train_prop <- 0.8
+train_size <- round(nrow(ev_data_mean) * train_prop)
+
+# Sample indices for training
+set.seed(42) # Ensure reproducibility
+train_indices <- sample(seq_len(nrow(ev_data_mean)), size = train_size)
+
+# Split the data
+training_set <- ev_data_mean[train_indices, ]
+test_set <- ev_data_mean[-train_indices, ]
+
+# Train the LDA model
+lda_model <- lda(high.mean ~ ., data = training_set)
+print(lda_model)
+
+# Predict on test set
+lda.pred <- predict(lda_model, test_set)
+
+#increasing the threshold 
+lda.class <- ifelse(lda.pred$posterior[,1]>=0.9,"high","low")
+
+#test -mSE
+numeric_lda_class<-as.numeric(lda.class) -1
+numeric_actual_class<-as.numeric(test_set$high.mean)-1
+mse <- mean((numeric_lda_class-numeric_actual_class)^2)
+print(mse)
+#ROC Curve
+
+roc_curve<-roc(test_set$high.mean,lda.pred$posterior[,1],levels=c("low","high"))
+plot(roc_curve,main="ROC Curve for LDA Model",col="#1c61b6")
+
+# Compare predictions with actual
+confusion_matrix <- table(lda.class, test_set$high.mean)
+print(confusion_matrix)
+
+mean(lda.class==test_set$high.mean)
+
+```
+

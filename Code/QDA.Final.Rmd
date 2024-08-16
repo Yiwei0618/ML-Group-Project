@@ -1,0 +1,63 @@
+---
+title: "QDA_Final"
+author: "Shiva Chitta"
+date: "2024-04-23"
+output: html_document
+---
+
+```{r}
+library(MASS)
+library(dplyr)
+library(caret)  # For nearZeroVar function
+library(corrplot)
+
+set.seed(42)
+evadoption <- read.csv("thisone.csv")
+
+# Convert necessary variables to factors, ensure levels are consistent
+evadoption$ZIPCODE <- as.factor(evadoption$ZIPCODE)
+evadoption$high.mean <- factor(ifelse(evadoption$EV_ADOPT_RATE >= 0.001038, "high", "low"))
+
+# Exclude ZIPCODE and other undesired variables before splitting the data
+ev_data_mean <- evadoption %>%
+  select(-ZIPCODE, -total_ev_count, -TP_MALE, -TP_FEMALE, -HIGH_GRAD_HIGHER,
+         -BACH_HIGH, -EV_ADOPT_RATE, -RACE_TOT_1RACE, -RACE_TOT_2_RACE,
+         -RACE_1AI_AN_TOTAL, -RACE_1ASIAN_TOTAL, -RACE_1NHPI_TOTAL,
+         -ETHN_HISP_LAT_TOTAL, -ETHN_NOT_HISP_LAT_TOTAL)
+
+# Remove zero variance features
+nzv <- nearZeroVar(ev_data_mean)
+ev_data_mean <- ev_data_mean[, -nzv]
+
+# Check for and handle highly correlated features
+cor_mat <- cor(ev_data_mean[,-ncol(ev_data_mean)])  # Assuming the last column is the factor 'high.mean'
+high_cor <- findCorrelation(cor_mat, cutoff = 0.80)  # Adjust cutoff based on preference
+ev_data_mean <- ev_data_mean[, -high_cor]
+
+# Ensure balanced sampling
+low_samples <- ev_data_mean %>% filter(high.mean == "low") %>% sample_n(sum(ev_data_mean$high.mean == "high"))
+high_samples <- ev_data_mean %>% filter(high.mean == "high")
+balanced_data <- bind_rows(low_samples, high_samples)
+
+# Split data into training and test sets
+set.seed(42) # Ensure reproducibility
+training_rows <- createDataPartition(balanced_data$high.mean, p = 0.8, list = FALSE)
+training_set <- balanced_data[training_rows, ]
+test_set <- balanced_data[-training_rows, ]
+
+# Train the QDA model
+qda_model <- qda(high.mean ~ ., data = training_set)
+print(qda_model)
+
+# Predict on test set
+qda_pred <- predict(qda_model, test_set)
+qda_class <- qda_pred$class
+
+# Confusion matrix
+confusion_matrix <- table(Predicted = qda_class, Actual = test_set$high.mean)
+print(confusion_matrix)
+
+# Accuracy
+accuracy <- mean(qda_class == test_set$high.mean)
+print(paste("Accuracy:", accuracy))
+```

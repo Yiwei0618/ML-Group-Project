@@ -1,0 +1,746 @@
+---
+title: "EV Trees"
+author: "Jennifer Bernard"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(caTools)
+set.seed(42)
+ev_data = read.csv("ev_adoption_data_final.csv")
+head(ev_data)
+
+split = sample.split(ev_data$total_ev_count, SplitRatio = 0.8)
+
+# training data
+ev_train = subset(ev_data, split==TRUE)
+
+# testing data
+ev_test = subset(ev_data, split == FALSE)
+
+#correlation matrix
+#cor(subset(ev_train, select = -c(ZIPCODE,AVG_HHSZ_OWNER,AVG_HHSZ_RENTER,TP_SEX_RATIO, TP_MED_AGE,TP_18Y_OVR_SXRATIO, TP_65Y_OVR_SXRATIO) ))
+
+```
+
+
+# Reg - Tree 1 - Regression trees with different variable combinations
+```{r}
+library(tree)
+library(ISLR2)
+
+#Tree 1 - Everything
+
+# fit regression tree to training set
+tree.ev1 = tree(total_ev_count ~ ., ev_train)
+summary(tree.ev1)
+
+# plot tree
+plot(tree.ev1)
+par(cex = 0.4)
+text(tree.ev1, pretty = 0)
+
+# find test MSE:
+
+# prediction of adoption with test data
+tree.pred1 = predict(tree.ev1, newdata = ev_test)
+# actual adoption from test data
+actual.adoption = ev_test[ , "total_ev_count"]
+# calculate mean squared error with test data (test MSE)
+mean((tree.pred1 - actual.adoption)^2)
+```
+
+# Reg - Tree 2 - Regression trees with different variable combinations
+```{r}
+set.seed(42)
+
+#Tree 2 - take out multicollinear variables for sex and education
+
+# fit regression tree to training set
+
+tree.ev2 = tree(total_ev_count ~ .
+  -TP_MALE
+  -TP_FEMALE
+  -HIGH_GRAD_HIGHER
+  -BACH_HIGH
+  -EV_ADOPT_RATE,
+  ev_train)
+summary(tree.ev2)
+
+# plot tree
+plot(tree.ev2)
+par(cex = 0.5)
+text(tree.ev2, pretty = 0)
+
+# find test MSE:
+
+# prediction of sales with test data
+tree.pred2 = predict(tree.ev2, newdata = ev_test)
+# actual adoption from test data
+actual.adoption = ev_test[ , "total_ev_count"]
+# calculate mean squared error with test data (test MSE)
+mean((tree.pred2 - actual.adoption)^2)
+```
+
+# Reg - Tree 3 - Regression trees with different variable combinations
+```{r}
+set.seed(42)
+#Tree 3 - take out multicollinear variables for sex, education, race
+
+# fit regression tree to training set
+
+tree.ev3 = tree(total_ev_count ~ .
+  -TP_MALE
+  -TP_FEMALE
+  -HIGH_GRAD_HIGHER
+  -BACH_HIGH
+  -EV_ADOPT_RATE
+  -RACE_TOT_1RACE
+  -RACE_TOT_2_RACE
+  -RACE_1AI_AN_TOTAL
+  -RACE_1ASIAN_TOTAL
+  -RACE_1NHPI_TOTAL
+  -ETHN_HISP_LAT_TOTAL
+  -ETHN_NOT_HISP_LAT_TOTAL,
+  ev_train)
+summary(tree.ev3)
+
+# plot tree
+plot(tree.ev3)
+par(cex = 0.5)
+text(tree.ev3, pretty = 0)
+
+# find test MSE:
+
+# prediction of adoption with test data
+tree.pred3 = predict(tree.ev3, newdata = ev_test)
+# actual adoption from test data
+actual.adoption = ev_test[ , "total_ev_count"]
+# calculate mean squared error with test data (test MSE)
+mean((tree.pred3 - actual.adoption)^2)
+```
+
+# Reg - CV (Tree 3) - Use cross-validation to determine optimal level of tree complexity. Does pruning improve the test MSE?
+```{r}
+# CV
+cv.ev3 = cv.tree(tree.ev3)
+plot(cv.ev3$size, cv.ev3$dev, type = "b")
+
+# create pruned tree with optimal level of complexity
+prune.ev3 = prune.tree(tree.ev3, best = 6)
+
+# plotting tree for fun
+plot(prune.ev3)
+par(cex = 0.5)
+text(tree.ev3, pretty = 0)
+
+# find test MSE of pruned tree
+
+#predict adoption with test data
+pruned.tree.pred3 = predict(prune.ev3, newdata = ev_test)
+
+#calculate MSE with test data
+mean((pruned.tree.pred3 - actual.adoption)^2)
+```
+
+# Reg - Bagging (Tree 3) - Bagging - What test MSE do you obtain? Use the importance() function to determine which variables are most important.
+```{r}
+library(randomForest)
+set.seed(42)
+
+# use bagging to analyze data
+bag.ev3 = randomForest(total_ev_count ~ .
+  -TP_MALE
+  -TP_FEMALE
+  -HIGH_GRAD_HIGHER
+  -BACH_HIGH
+  -EV_ADOPT_RATE
+  -RACE_TOT_1RACE
+  -RACE_TOT_2_RACE
+  -RACE_1AI_AN_TOTAL
+  -RACE_1ASIAN_TOTAL
+  -RACE_1NHPI_TOTAL
+  -ETHN_HISP_LAT_TOTAL
+  -ETHN_NOT_HISP_LAT_TOTAL,
+data = ev_train, mtry = 104, importance = TRUE)
+
+# find test MSE
+pred.bag3 = predict(bag.ev3, newdata = ev_test)
+mean((pred.bag3 - actual.adoption)^2)
+
+# find most important variables
+importance(bag.ev3)
+bag.ev3.VIP = varImpPlot(bag.ev3, cex= 0.5)
+bag.ev3.VIP
+
+# create data.frame for plot
+#library(dplyr)
+#bag.ev3.VIP <- as.data.frame(bag.ev3.VIP)
+```
+
+# Reg - Random Forests (Tree 3) - What test MSE do you obtain? Use the importance() function to determine which variables are most important. Describe the effect of m on the error rate.
+```{r}
+set.seed(42)
+
+### VERSION 1 ###
+# use random forests (version 1, using randomForest default settings, m = 34)
+rf.ev3 = randomForest(total_ev_count ~ .
+  -TP_MALE
+  -TP_FEMALE
+  -HIGH_GRAD_HIGHER
+  -BACH_HIGH
+  -EV_ADOPT_RATE
+  -RACE_TOT_1RACE
+  -RACE_TOT_2_RACE
+  -RACE_1AI_AN_TOTAL
+  -RACE_1ASIAN_TOTAL
+  -RACE_1NHPI_TOTAL
+  -ETHN_HISP_LAT_TOTAL
+  -ETHN_NOT_HISP_LAT_TOTAL,
+data = ev_train, importance = TRUE)
+
+rf.ev3
+
+# find test MSE
+pred.rf3 = predict(rf.ev3, newdata = ev_test)
+mean((pred.rf3 - actual.adoption)^2)
+
+# find most important variables
+importance(rf.ev3)
+varImpPlot(rf.ev3, cex = 0.5)
+```
+
+
+```{r}
+set.seed(42)
+### VERSION 2 ###
+# use random forests (version 2, using m = p/2, p = 117-13 = 104 for ev3)
+rf2.ev3 = randomForest(total_ev_count ~ .
+  -TP_MALE
+  -TP_FEMALE
+  -HIGH_GRAD_HIGHER
+  -BACH_HIGH
+  -EV_ADOPT_RATE
+  -RACE_TOT_1RACE
+  -RACE_TOT_2_RACE
+  -RACE_1AI_AN_TOTAL
+  -RACE_1ASIAN_TOTAL
+  -RACE_1NHPI_TOTAL
+  -ETHN_HISP_LAT_TOTAL
+  -ETHN_NOT_HISP_LAT_TOTAL,
+data = ev_train, mtry = 52, importance = TRUE)
+#rf2.ev3
+
+# find test MSE
+pred.rf2.ev3 = predict(rf2.ev3, newdata = ev_test)
+mean((pred.rf2.ev3 - actual.adoption)^2)
+
+# find most important variables
+importance(rf2.ev3)
+varImpPlot(rf2.ev3, cex = 0.5)
+```
+
+
+```{r}
+set.seed(42)
+### VERSION 3 ###
+# use random forests (version 3, using m = squrt p, p = 117-13 = 104 for ev3)
+rf3.ev3 = randomForest(total_ev_count ~ .
+  -TP_MALE
+  -TP_FEMALE
+  -HIGH_GRAD_HIGHER
+  -BACH_HIGH
+  -EV_ADOPT_RATE
+  -RACE_TOT_1RACE
+  -RACE_TOT_2_RACE
+  -RACE_1AI_AN_TOTAL
+  -RACE_1ASIAN_TOTAL
+  -RACE_1NHPI_TOTAL
+  -ETHN_HISP_LAT_TOTAL
+  -ETHN_NOT_HISP_LAT_TOTAL,
+data = ev_train, mtry = 10, importance = TRUE)
+
+
+# find test MSE
+pred.rf3.ev3 = predict(rf3.ev3, newdata = ev_test)
+mean((pred.rf3.ev3 - actual.adoption)^2)
+
+# find most important variables
+importance(rf3.ev3)
+varImpPlot(rf3.ev3, cex = 0.5)
+
+```
+
+# Reg - Boosting (Tree 3)
+```{r}
+### VERSION 1 - 5000 trees ###
+library(gbm)
+set.seed(42)
+
+boost.ev3 = gbm(total_ev_count ~ .
+  -ZIPCODE
+  -TP_MALE
+  -TP_FEMALE
+  -HIGH_GRAD_HIGHER
+  -BACH_HIGH
+  -EV_ADOPT_RATE
+  -RACE_TOT_1RACE
+  -RACE_TOT_2_RACE
+  -RACE_1AI_AN_TOTAL
+  -RACE_1ASIAN_TOTAL
+  -RACE_1NHPI_TOTAL
+  -ETHN_HISP_LAT_TOTAL
+  -ETHN_NOT_HISP_LAT_TOTAL,
+data = ev_train, distribution = "gaussian", n.trees = 5000, interaction.depth = 4)
+
+# find most important variables
+summary(boost.ev3)
+plot(boost.ev3, i = "INC_HH_200")
+plot(boost.ev3, i = "GRAD_PRO")
+
+# find test MSE
+pred.boost.ev3 = predict(boost.ev3, newdata = ev_test)
+mean((pred.boost.ev3 - actual.adoption)^2)
+
+```
+```{r}
+###VERSION 2 - 40 trees - tried 35, 38, 39, 41, 50 - 40 is min test MSE###
+library(gbm)
+set.seed(42)
+
+boost.ev3 = gbm(total_ev_count ~ .
+  -ZIPCODE
+  -TP_MALE
+  -TP_FEMALE
+  -HIGH_GRAD_HIGHER
+  -BACH_HIGH
+  -EV_ADOPT_RATE
+  -RACE_TOT_1RACE
+  -RACE_TOT_2_RACE
+  -RACE_1AI_AN_TOTAL
+  -RACE_1ASIAN_TOTAL
+  -RACE_1NHPI_TOTAL
+  -ETHN_HISP_LAT_TOTAL
+  -ETHN_NOT_HISP_LAT_TOTAL,
+data = ev_train, distribution = "gaussian", n.trees = 40, interaction.depth = 4)
+
+# find most important variables
+summary(boost.ev3)
+plot(boost.ev3, i = "INC_HH_200")
+plot(boost.ev3, i = "GRAD_PRO")
+
+# find test MSE
+pred.boost.ev3 = predict(boost.ev3, newdata = ev_test)
+mean((pred.boost.ev3 - actual.adoption)^2)
+
+```
+
+
+# Tree 3 - Classification
+```{r}
+set.seed(42)
+attach(ev_data)
+High.mean = factor(ifelse(EV_ADOPT_RATE >= 0.001038, "High", "Low"))
+ev_data_mean = data.frame(ev_data, High.mean)
+
+#split = sample.split(ev_data$total_ev_count, SplitRatio = 0.8)
+split2 = sample.split(ev_data_mean, SplitRatio = 0.8)
+
+# training data
+ev_train_mean = subset(ev_data_mean, split2 == TRUE)
+
+# testing data
+ev_test_mean = subset(ev_data_mean, split2 == FALSE)
+
+class1.tree3 = tree(High.mean ~ .
+  -total_ev_count
+  -TP_MALE
+  -TP_FEMALE
+  -HIGH_GRAD_HIGHER
+  -BACH_HIGH
+  -EV_ADOPT_RATE
+  -RACE_TOT_1RACE
+  -RACE_TOT_2_RACE
+  -RACE_1AI_AN_TOTAL
+  -RACE_1ASIAN_TOTAL
+  -RACE_1NHPI_TOTAL
+  -ETHN_HISP_LAT_TOTAL
+  -ETHN_NOT_HISP_LAT_TOTAL,
+data = ev_train_mean)
+
+summary(class1.tree3)
+
+# plot tree
+plot(class1.tree3)
+par(cex = 0.5)
+text(class1.tree3, pretty = 0)
+
+# find classification error rate:
+
+# prediction of high/low adoption class with test data
+class1.tree3.pred = predict(class1.tree3, newdata = ev_test_mean, type = "class")
+class1.tree3.pred
+
+table(class1.tree3.pred, ev_test_mean$High.mean)
+
+# iv. Compute the validation set error, which is the fraction of the observations in the validation set that are misclassified.
+
+mean(class1.tree3.pred != ev_test_mean$High.mean)
+
+```
+
+# CV - Classification
+```{r}
+set.seed(42)
+
+# CV
+cv.class = cv.tree(class1.tree3)
+plot(cv.class$size, cv.class$dev, type = "b")
+
+# create pruned tree with optimal level of complexity
+prune.class = prune.tree(class1.tree3, best = 6)
+
+# plotting tree for fun
+plot(prune.class)
+par(cex = 0.5)
+text(prune.class, pretty = 0)
+
+# find classification error rate:
+
+# prediction of high/low adoption class with test data
+prune.class.pred = predict(prune.class, newdata = ev_test_mean, type = "class")
+#class1.tree3.pred
+
+table(prune.class.pred, ev_test_mean$High.mean)
+
+# iv. Compute the validation set error, which is the fraction of the observations in the validation set that are misclassified.
+
+mean(prune.class.pred != ev_test_mean$High.mean)
+```
+
+# Bagging - Classification
+```{r}
+set.seed(42)
+
+# p = 118 - 14 = 104
+bag.class.ev = randomForest(High.mean ~ .
+  -total_ev_count
+  -TP_MALE
+  -TP_FEMALE
+  -HIGH_GRAD_HIGHER
+  -BACH_HIGH
+  -EV_ADOPT_RATE
+  -RACE_TOT_1RACE
+  -RACE_TOT_2_RACE
+  -RACE_1AI_AN_TOTAL
+  -RACE_1ASIAN_TOTAL
+  -RACE_1NHPI_TOTAL
+  -ETHN_HISP_LAT_TOTAL
+  -ETHN_NOT_HISP_LAT_TOTAL, 
+  ev_train_mean, mtry = 104, importance = TRUE)
+
+importance(bag.class.ev)
+bag.class.ev.VIP = varImpPlot(bag.class.ev, cex= 0.5)
+bag.class.ev.VIP
+
+# find classification error rate:
+
+# prediction of high/low adoption class with test data
+bag.class.pred = predict(bag.class.ev, newdata = ev_test_mean, type = "class")
+
+
+table(bag.class.pred, ev_test_mean$High.mean)
+
+# iv. Compute the validation set error, which is the fraction of the observations in the validation set that are misclassified.
+
+mean(bag.class.pred != ev_test_mean$High.mean)
+```
+
+# Random Forests - Classification
+```{r}
+set.seed(42)
+
+### VERSION 1 ###
+# use random forests (version 1, using randomForest default settings)
+rf.class.ev = randomForest(High.mean ~ .
+  -total_ev_count
+  -TP_MALE
+  -TP_FEMALE
+  -HIGH_GRAD_HIGHER
+  -BACH_HIGH
+  -EV_ADOPT_RATE
+  -RACE_TOT_1RACE
+  -RACE_TOT_2_RACE
+  -RACE_1AI_AN_TOTAL
+  -RACE_1ASIAN_TOTAL
+  -RACE_1NHPI_TOTAL
+  -ETHN_HISP_LAT_TOTAL
+  -ETHN_NOT_HISP_LAT_TOTAL, 
+  ev_train_mean, importance = TRUE)
+
+rf.class.ev
+
+importance(rf.class.ev)
+rf.class.ev.VIP = varImpPlot(rf.class.ev, cex= 0.5)
+rf.class.ev.VIP
+
+# find classification error rate:
+
+# prediction of high/low adoption class with test data
+rf.class.pred = predict(rf.class.ev, newdata = ev_test_mean, type = "class")
+
+
+table(rf.class.pred, ev_test_mean$High.mean)
+
+# iv. Compute the validation set error, which is the fraction of the observations in the validation set that are misclassified.
+
+mean(rf.class.pred != ev_test_mean$High.mean)
+```
+
+
+```{r}
+set.seed(42)
+### VERSION 2 ###
+# use random forests (version 2, using m = p/2 = 52, p = 118-14 = 104)
+rf2.class.ev = randomForest(High.mean ~ .
+  -total_ev_count
+  -TP_MALE
+  -TP_FEMALE
+  -HIGH_GRAD_HIGHER
+  -BACH_HIGH
+  -EV_ADOPT_RATE
+  -RACE_TOT_1RACE
+  -RACE_TOT_2_RACE
+  -RACE_1AI_AN_TOTAL
+  -RACE_1ASIAN_TOTAL
+  -RACE_1NHPI_TOTAL
+  -ETHN_HISP_LAT_TOTAL
+  -ETHN_NOT_HISP_LAT_TOTAL, 
+  ev_train_mean, mtry = 52, importance = TRUE)
+
+importance(rf2.class.ev)
+rf2.class.ev.VIP = varImpPlot(rf2.class.ev, cex= 0.5)
+rf2.class.ev.VIP
+
+# find classification error rate:
+
+# prediction of high/low adoption class with test data
+rf2.class.pred = predict(rf2.class.ev, newdata = ev_test_mean, type = "class")
+
+
+table(rf2.class.pred, ev_test_mean$High.mean)
+
+# iv. Compute the validation set error, which is the fraction of the observations in the validation set that are misclassified.
+
+mean(rf2.class.pred != ev_test_mean$High.mean)
+```
+
+
+```{r}
+set.seed(42)
+### VERSION 3 ###
+# use random forests (version 3, using m = squrt p, p = 118-14 = 104)
+rf3.class.ev = randomForest(High.mean ~ .
+  -total_ev_count
+  -TP_MALE
+  -TP_FEMALE
+  -HIGH_GRAD_HIGHER
+  -BACH_HIGH
+  -EV_ADOPT_RATE
+  -RACE_TOT_1RACE
+  -RACE_TOT_2_RACE
+  -RACE_1AI_AN_TOTAL
+  -RACE_1ASIAN_TOTAL
+  -RACE_1NHPI_TOTAL
+  -ETHN_HISP_LAT_TOTAL
+  -ETHN_NOT_HISP_LAT_TOTAL, 
+  ev_train_mean, mtry = 10, importance = TRUE)
+
+importance(rf3.class.ev)
+rf3.class.ev.VIP = varImpPlot(rf3.class.ev, cex= 0.5)
+rf3.class.ev.VIP
+
+# find classification error rate:
+
+# prediction of high/low adoption class with test data
+rf3.class.pred = predict(rf3.class.ev, newdata = ev_test_mean, type = "class")
+
+
+table(rf3.class.pred, ev_test_mean$High.mean)
+
+# iv. Compute the validation set error, which is the fraction of the observations in the validation set that are misclassified.
+
+mean(rf3.class.pred != ev_test_mean$High.mean)
+```
+# Boosting - Classification
+```{r}
+###Version 1 - 5000###
+attach(ev_data)
+library(gbm)
+library(xgboost)
+set.seed(42)
+
+#bernoulli.high.mean = factor(ifelse(EV_ADOPT_RATE >= 0.001038, "1", "0"))
+bernoulli.high.mean = ifelse(EV_ADOPT_RATE >= 0.001038, 1, 0)
+ev_data_bern_mean = data.frame(ev_data, bernoulli.high.mean)
+
+#split = sample.split(ev_data$total_ev_count, SplitRatio = 0.8)
+split2 = sample.split(ev_data_bern_mean, SplitRatio = 0.8)
+
+# training data
+ev_train_bern_mean = subset(ev_data_bern_mean, split2 == TRUE)
+
+# testing data
+ev_test_bern_mean = subset(ev_data_bern_mean, split2 == FALSE)
+
+
+####summary(boost.class) line ERROR: need finite 'xlim' values ####
+# There shouldn't be any NA/missing data in this csv, but I tried the "na.omit" lines of code to try to resolve this error that popped up for the summary(boost.class) line: 
+#Warning: no non-missing arguments to min; returning InfWarning: no non-missing arguments to max; returning -InfError in plot.window(xlim, ylim, log = log, ...) : 
+#  need finite 'xlim' values
+#ev_train_bern_mean = na.omit(ev_train_bern_mean)
+#ev_test_bern_mean = na.omit(ev_test_bern_mean)
+####
+
+
+boost.class = gbm(bernoulli.high.mean ~ .
+  -total_ev_count 
+  -ZIPCODE
+  -TP_MALE
+  -TP_FEMALE
+  -HIGH_GRAD_HIGHER
+  -BACH_HIGH
+  -EV_ADOPT_RATE
+  -RACE_TOT_1RACE
+  -RACE_TOT_2_RACE
+  -RACE_1AI_AN_TOTAL
+  -RACE_1ASIAN_TOTAL
+  -RACE_1NHPI_TOTAL
+  -ETHN_HISP_LAT_TOTAL
+  -ETHN_NOT_HISP_LAT_TOTAL,
+data = ev_train_bern_mean, 
+distribution = "bernoulli", 
+n.trees = 5000, 
+interaction.depth = 4
+)
+
+#cv.boost = cv.gbm(
+#  boost.class,
+#  ev_train_bern_mean,
+#  K = 10,
+#  cv.lim = 10,
+#  jack.knife = FALSE, 
+# verbose = TRUE
+#)
+
+#  distribution = "bernoulli",
+#  n.trees = 100,
+#  interaction.depth = 4,
+#  shrinkage = 0.1,
+#  verbose = TRUE
+#)
+
+
+# find most important variables
+summary(boost.class)
+#plot(boost.class, i = "")
+#plot(boost.class, i = " ")
+
+# find classification error rate:
+
+# prediction of high/low adoption class with test data
+boost.class.pred = predict(boost.class, ev_test_bern_mean, type = "response", n.trees = 5000)
+#print(boost.class.pred)
+
+bcp <- rep(0, 397)
+bcp[boost.class.pred > 0.5] = 1
+
+### Helpful Code from Problem Set ###
+#log.probs <- predict(log.fits, type = "response")
+#contrasts(Direction)
+#log.pred <- rep("Down", 1089)
+#log.pred[log.probs > 0.5] = "Up"
+#table(log.pred, Direction)
+#mean(log.pred == Direction)
+
+#table(boost.class.pred, ev_test_bern_mean$bernoulli.high.mean)
+table(bcp, ev_test_bern_mean$bernoulli.high.mean)
+
+# compute the classification error rate
+
+#mean(boost.class.pred != ev_test_bern_mean$bernoulli.high.mean)
+mean(bcp != ev_test_bern_mean$bernoulli.high.mean)
+```
+```{r}
+###Version 2 - Hunting for best number of trees###
+attach(ev_data)
+library(gbm)
+library(xgboost)
+set.seed(42)
+
+#bernoulli.high.mean = factor(ifelse(EV_ADOPT_RATE >= 0.001038, "1", "0"))
+bernoulli.high.mean = ifelse(EV_ADOPT_RATE >= 0.001038, 1, 0)
+ev_data_bern_mean = data.frame(ev_data, bernoulli.high.mean)
+
+#split = sample.split(ev_data$total_ev_count, SplitRatio = 0.8)
+split2 = sample.split(ev_data_bern_mean, SplitRatio = 0.8)
+
+# training data
+ev_train_bern_mean = subset(ev_data_bern_mean, split2 == TRUE)
+
+# testing data
+ev_test_bern_mean = subset(ev_data_bern_mean, split2 == FALSE)
+
+
+boost.class = gbm(bernoulli.high.mean ~ .
+  -total_ev_count 
+  -ZIPCODE
+  -TP_MALE
+  -TP_FEMALE
+  -HIGH_GRAD_HIGHER
+  -BACH_HIGH
+  -EV_ADOPT_RATE
+  -RACE_TOT_1RACE
+  -RACE_TOT_2_RACE
+  -RACE_1AI_AN_TOTAL
+  -RACE_1ASIAN_TOTAL
+  -RACE_1NHPI_TOTAL
+  -ETHN_HISP_LAT_TOTAL
+  -ETHN_NOT_HISP_LAT_TOTAL,
+data = ev_train_bern_mean, 
+distribution = "bernoulli", 
+n.trees = 190, 
+interaction.depth = 4
+)
+
+
+# find most important variables
+summary(boost.class)
+#plot(boost.class, i = "")
+#plot(boost.class, i = " ")
+
+# find classification error rate:
+
+# prediction of high/low adoption class with test data
+boost.class.pred = predict(boost.class, ev_test_bern_mean, type = "response", n.trees = 190)
+#print(boost.class.pred)
+
+bcp <- rep(0, 397)
+bcp[boost.class.pred > 0.5] = 1
+
+
+#table(boost.class.pred, ev_test_bern_mean$bernoulli.high.mean)
+table(bcp, ev_test_bern_mean$bernoulli.high.mean)
+
+# compute the classification error rate
+
+#mean(boost.class.pred != ev_test_bern_mean$bernoulli.high.mean)
+mean(bcp != ev_test_bern_mean$bernoulli.high.mean)
+```
+
+

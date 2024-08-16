@@ -1,0 +1,79 @@
+---
+title: "ev_prediction_linear_regression"
+author: "Yiwei Wu"
+date: "2024-04-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+Data Exploration Process, create the correlation matrix for numerical data
+```{r}
+library(caTools)
+set.seed(123)
+ev_data = read.csv("ev_adoption_data_final.csv")
+head(ev_data)
+
+split = sample.split(ev_data$total_ev_count, SplitRatio = 0.8)
+
+# training data
+ev_train = subset(ev_data, split==TRUE)
+
+# testing data
+ev_test = subset(ev_data, split == FALSE)
+
+#correlation matrix
+numeric_cols <- sapply(ev_train, is.numeric)
+ev_train_numeric <- ev_train[, numeric_cols]
+numeric_cols1 <- sapply(ev_test, is.numeric)
+ev_test_numeric <- ev_test[, numeric_cols1]
+cor_matrix <- cor(ev_train_numeric, use = "complete.obs")
+print(cor_matrix)
+
+```
+
+
+Linear Regression-Training
+```{r}
+lm_model_train <- lm(total_ev_count ~ ., data = ev_train_numeric)
+summary(lm_model_train)
+
+
+```
+
+Linear Regression-Testing
+```{r}
+lm_model_test <- lm(total_ev_count ~ ., data = ev_test_numeric)
+summary(lm_model_test)
+
+
+```
+
+
+```{r}
+
+ # Predict on training data
+train_predictions <- predict(lm_model_train, newdata = ev_train_numeric)
+
+# Predict on testing data
+test_predictions <- predict(lm_model_test, newdata = ev_test_numeric)
+
+# Calculate MSE for training data
+train_mse <- mean((ev_train_numeric$total_ev_count - train_predictions)^2)
+train_mse
+
+# Calculate MSE for testing data
+test_mse <- mean((ev_test_numeric$total_ev_count - test_predictions)^2)
+test_mse 
+
+```
+
+
+```{r}
+#residual plot
+plot(lm_model_train)
+summary(residuals(lm_model_train))
+```

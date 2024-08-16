@@ -1,0 +1,271 @@
+---
+title: "ev_prediction_yiwei"
+author: "Yiwei Wu"
+date: "2024-04-20"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+Step 1: Load the data and find mean and median of ev adoption rate
+```{r}
+
+ev_data <- read.csv("ev_adoption_data_final.csv")
+ev_no_zero <- ev_data[ev_data$EV_ADOPT_RATE > 0, ]
+ev_med <- median(ev_no_zero$EV_ADOPT_RATE)
+ev_mean <- mean(ev_no_zero$EV_ADOPT_RATE)
+
+```
+
+Step 2: Create dummy variables
+```{r}
+
+med_ev_binary <- rep(0, dim(ev_data)[1])
+med_ev_binary[ev_data$EV_ADOPT_RATE >= ev_med] = 1
+ev_median <- cbind(ev_data, med_ev_binary)
+
+library(dplyr)
+ev_median <- select(ev_median, -ZIPCODE)
+
+
+
+
+```
+
+
+
+Step 3: 
+```{r}
+
+#library(caTools)
+
+#split = sample.split(ev_data$total_ev_count, SplitRatio = 0.8)
+
+
+#ev_train = subset(ev_median, split==TRUE)
+#ev_test = subset(ev_median, split == FALSE)
+
+#train.indx <- createDataPartition(ev_median$EV_ADOPT_RATE, p = 0.8, list = FALSE)
+#train_ev <- ev_median[train.indx, ]
+#test_ev <- ev_median[-train.indx, ]
+
+#library(rsample)
+#split <- initial_split(ev_train, prop = 0.75, strata = "EV_ADOPT_RATE")
+#train_set <- training(split)
+#test_set <- testing(split)
+library(caret)
+set.seed(42)
+train.indx <- createDataPartition(ev_median$med_ev_binary, p = 0.8, list = FALSE)
+train_ev <- ev_median[train.indx, ]
+test_ev <- ev_median[-train.indx, ]
+
+
+
+```
+
+Fit a support vector classifier
+```{r}
+library(e1071)
+
+train_ev$med_ev_binary = as.factor(train_ev$med_ev_binary)
+test_ev$med_ev_binary = as.factor(test_ev$med_ev_binary)
+fit_svc = svm(med_ev_binary ~ ., data = train_ev, kernel = "linear", cost = 0.01)
+summary(fit_svc)
+
+train_ev$med_ev_binary = as.factor(train_ev$med_ev_binary)
+
+train.pred = predict(fit_svc, train_ev)
+table(train_ev$med_ev_binary, train.pred)
+
+
+test.pred = predict(fit_svc, test_ev)
+table(test_ev$med_ev_binary, test.pred)
+
+
+
+```
+training error: (3+72)/(1159+3+72+311)= 4.85%
+Testing error: (2+16)/(283+2+16+85) = 4.66%
+
+```{r}
+library(e1071)
+
+train_ev$med_ev_binary = as.factor(train_ev$med_ev_binary)
+test_ev$med_ev_binary = as.factor(test_ev$med_ev_binary)
+fit_svc = svm(med_ev_binary ~ ., data = train_ev, kernel = "linear", cost = 0.02)
+summary(fit_svc)
+
+train_ev$med_ev_binary = as.factor(train_ev$med_ev_binary)
+
+train.pred = predict(fit_svc, train_ev)
+table(train_ev$med_ev_binary, train.pred)
+
+
+test.pred = predict(fit_svc, test_ev)
+table(test_ev$med_ev_binary, test.pred)
+
+
+
+```
+
+(3+49)/(1159+49+334+3)= 3.3%
+(2+8)/(283+2+8+93) = 2.6%
+
+
+
+
+
+```{r}
+library(e1071)
+
+train_ev$med_ev_binary = as.factor(train_ev$med_ev_binary)
+test_ev$med_ev_binary = as.factor(test_ev$med_ev_binary)
+fit_svc = svm(med_ev_binary ~ ., data = train_ev, kernel = "linear", cost = 0.1)
+summary(fit_svc)
+
+train_ev$med_ev_binary = as.factor(train_ev$med_ev_binary)
+
+train.pred = predict(fit_svc, train_ev)
+table(train_ev$med_ev_binary, train.pred)
+
+
+test.pred = predict(fit_svc, test_ev)
+table(test_ev$med_ev_binary, test.pred)
+
+
+
+```
+11/(1162+11+372) = 0.7%
+7/(282+3+4+97) = 1.8%
+
+
+```{r}
+library(e1071)
+
+train_ev$med_ev_binary = as.factor(train_ev$med_ev_binary)
+test_ev$med_ev_binary = as.factor(test_ev$med_ev_binary)
+fit_svc = svm(med_ev_binary ~ BACH_HIGH , data = train_ev, kernel = "linear", cost = 0.1)
+summary(fit_svc)
+
+train_ev$med_ev_binary = as.factor(train_ev$med_ev_binary)
+
+train.pred = predict(fit_svc, train_ev)
+table(train_ev$med_ev_binary, train.pred)
+
+
+test.pred = predict(fit_svc, test_ev)
+table(test_ev$med_ev_binary, test.pred)
+
+
+
+```
+
+
+
+```{r}
+library(e1071)
+
+train_ev$med_ev_binary = as.factor(train_ev$med_ev_binary)
+test_ev$med_ev_binary = as.factor(test_ev$med_ev_binary)
+fit_svc = svm(med_ev_binary ~ INDUS_AGRI + BACH_HIGH +OCCU_PRO , data = train_ev, kernel = "linear", cost = 0.1)
+summary(fit_svc)
+
+train_ev$med_ev_binary = as.factor(train_ev$med_ev_binary)
+
+train.pred = predict(fit_svc, train_ev)
+table(train_ev$med_ev_binary, train.pred)
+
+
+test.pred = predict(fit_svc, test_ev)
+table(test_ev$med_ev_binary, test.pred)
+
+
+
+```
+
+
+
+
+
+
+
+
+
+linear kernal
+```{r}
+
+train_ev$med_ev_binary = as.factor(train_ev$med_ev_binary)
+tune.out = tune(svm,med_ev_binary~ ., data = train_ev, kernal = "linear", ranges = #list(cost=seq(0.1,10,by = 0.1)))
+list(cost=seq(1,10,by = 1)))
+
+
+
+svm.linear = svm(med_ev_binary ~ ., kernel = "linear", data = train_ev, cost = tune.out$best.parameters$cost)
+train.pred = predict(svm.linear, ev_train)
+table(train_ev$med_ev_binary, train.pred)
+
+svm.linear.test = svm(med_ev_binary ~ ., kernel = "linear", data = test_ev, cost = tune.out$best.parameters$cost)
+test.pred = predict(svm.linear.test, test_ev)
+table(test_ev$med_ev_binary, test.pred)
+
+
+```
+
+
+radial kernal
+```{r}
+train_ev$med_ev_binary = as.factor(train_ev$med_ev_binary)
+test_ev$med_ev_binary = as.factor(test_ev$med_ev_binary)
+svm_radial = svm(med_ev_binary ~ ., kernel = "radial", data = train_ev, cost = 0.01)
+summary(svm_radial)
+
+train.pred = predict(svm_radial, train_ev)
+table(train_ev$med_ev_binary, train.pred)
+
+svm.radial.test = svm(med_ev_binary ~ ., kernel = "radial", data = test_ev, cost = 0.01)
+test.pred = predict(svm.radial.test, test_ev)
+table(test_ev$med_ev_binary, test.pred)
+
+```
+radial kernal
+383/(1321+234) = 24.64%
+101/(329 + 56) = 26.23%
+
+
+
+```{r}
+train_ev$med_ev_binary = as.factor(train_ev$med_ev_binary)
+test_ev$med_ev_binary = as.factor(test_ev$med_ev_binary)
+svm_poly=svm(med_ev_binary~.,kernel="polynomial",data=train_ev,cost=0.01,degree=2)
+summary(svm_poly)
+```
+
+
+```{r}
+train_ev$med_ev_binary = as.factor(train_ev$med_ev_binary)
+test_ev$med_ev_binary = as.factor(test_ev$med_ev_binary)
+train.pred = predict(svm_poly, train_ev)
+table(train_ev$med_ev_binary, train.pred)
+
+
+test.pred = predict(svm_poly, test_ev)
+table(test_ev$med_ev_binary, test.pred)
+
+
+
+```
+polynomial:
+
+(345+5)/(1157+5+345+38) = 22.65%
+(93+1)/(284+1+93+8) = 24.35%
+
+
+
+
+
